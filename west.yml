@@ -20,7 +20,7 @@ manifest:
 
   remotes:
     - name: upstream
-      url-base: git@github.com:rillbert/zephyr.git
+      url-base: https://github.com/zephyrproject-rtos
 
 
   #
