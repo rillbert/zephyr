@@ -23,6 +23,10 @@ LOG_MODULE_REGISTER(esp32_wifi, CONFIG_WIFI_LOG_LEVEL);
 #include "esp_system.h"
 #include "esp_wpa.h"
 
+// declare strnlen used below. This is a work-around to including the
+// correct <string.h> file...and should probably be updated.
+extern size_t	 strnlen (const char *, size_t);
+
 #define DHCPV4_MASK (NET_EVENT_IPV4_DHCP_BOUND | NET_EVENT_IPV4_DHCP_STOP)
 
 /* use global iface pointer to support any ethernet driver */
