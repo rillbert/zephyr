@@ -33,6 +33,7 @@
 #include "esp_clk_internal.h"
 #endif
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/reboot.h>
 
 extern void z_cstart(void);
 
@@ -179,9 +180,26 @@ int IRAM_ATTR arch_printk_char_out(int c)
 	return 0;
 }
 
+/**
+ * Reset the chip. The given type controls the type of reset. For details, see
+ * sec 3.1 in the technical ref manual
+ * https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf.
+ *
+ * type is one of:
+ * SYS_REBOOT_WARM - perform a CPU reset (reset reason 0x0C)
+ * SYS_REBOOT_COLD - perform a Core reset (reset reason 0x03)
+ * other           - perform a Core reset (reset reason 0x03)
+*/
 void sys_arch_reboot(int type)
 {
-	esp_restart_noos();
+	if(type == SYS_REBOOT_WARM)
+	{
+		// never returns
+		esp_restart_noos();
+	}
+
+	// never returns
+	esp_restart_noos_dig();
 }
 
 void IRAM_ATTR esp_restart_noos(void)
@@ -250,4 +268,17 @@ void IRAM_ATTR esp_restart_noos(void)
 	while (true) {
 		;
 	}
+}
+
+/* adapted from the esp-idf implementation found in esp_system.c */
+void IRAM_ATTR esp_restart_noos_dig(void)
+{
+    // switch to XTAL (otherwise we will keep running from the PLL)
+    rtc_clk_cpu_freq_set_xtal();
+
+    // reset the digital part
+    SET_PERI_REG_MASK(RTC_CNTL_OPTIONS0_REG, RTC_CNTL_SW_SYS_RST);
+    while (true) {
+        ;
+    }
 }
