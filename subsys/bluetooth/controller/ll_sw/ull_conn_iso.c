@@ -159,8 +159,10 @@ struct ll_conn_iso_stream *ll_iso_stream_connected_get(uint16_t handle)
 	}
 
 	cis = ll_conn_iso_stream_get(handle);
-	if ((cis->group == NULL) || (cis->lll.handle != handle)) {
-		/* CIS does not belong to a group or has inconsistent handle */
+	if ((cis->group == NULL) || (cis->lll.handle != handle) || !cis->established) {
+		/* CIS does not belong to a group, has inconsistent handle or is
+		 * not yet established.
+		 */
 		return NULL;
 	}
 
@@ -275,8 +277,7 @@ void ull_conn_iso_cis_established(struct ll_conn_iso_stream *cis)
 	est->status = 0;
 	est->cis_handle = cis->lll.handle;
 
-	ll_rx_put(node_rx->hdr.link, node_rx);
-	ll_rx_sched();
+	ll_rx_put_sched(node_rx->hdr.link, node_rx);
 #endif /* defined(CONFIG_BT_LL_SW_LLCP_LEGACY) */
 
 	cis->established = 1;
@@ -543,6 +544,7 @@ static int init_reset(void)
 		cis = ll_conn_iso_stream_get(handle);
 		cis->cis_id = 0;
 		cis->group  = NULL;
+		cis->lll.link_tx_free = NULL;
 	}
 
 	conn_accept_timeout = CONN_ACCEPT_TIMEOUT_DEFAULT;
@@ -887,8 +889,7 @@ static void cis_disabled_cb(void *param)
 			node_terminate->hdr.type = NODE_RX_TYPE_TERMINATE;
 			*((uint8_t *)node_terminate->pdu) = cis->terminate_reason;
 
-			ll_rx_put(node_terminate->hdr.link, node_terminate);
-			ll_rx_sched();
+			ll_rx_put_sched(node_terminate->hdr.link, node_terminate);
 
 			if (cig->lll.resume_cis == cis->lll.handle) {
 				/* Resume pending for terminating CIS - stop ticker */
@@ -961,6 +962,11 @@ static void cis_tx_lll_flush(void *param)
 		link = memq_dequeue(lll->memq_tx.tail, &lll->memq_tx.head,
 				    (void **)&tx);
 	}
+
+	LL_ASSERT(!lll->link_tx_free);
+	link = memq_deinit(&lll->memq_tx.head, &lll->memq_tx.tail);
+	LL_ASSERT(link);
+	lll->link_tx_free = link;
 
 	/* Resume CIS teardown in ULL_HIGH context */
 	mfys[cig->lll.handle].param = &cig->lll;

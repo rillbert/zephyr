@@ -69,6 +69,14 @@ static const struct pinctrl_dev_config *usb_pcfg =
 #define USB_OTG_HS_EMB_PHY (DT_HAS_COMPAT_STATUS_OKAY(st_stm32_usbphyc) && \
 			    DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs))
 
+#define USB_OTG_HS_ULPI_PHY (DT_HAS_COMPAT_STATUS_OKAY(usb_ulpi_phy) && \
+			    DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs))
+
+#if USB_OTG_HS_ULPI_PHY
+static const struct gpio_dt_spec ulpi_reset =
+	GPIO_DT_SPEC_GET_OR(DT_PHANDLE(DT_INST(0, st_stm32_otghs), phys), reset_gpios, {0});
+#endif
+
 /*
  * USB, USB_OTG_FS and USB_DRD_FS are defined in STM32Cube HAL and allows to
  * distinguish between two kind of USB DC. STM32 F0, F3, L0 and G4 series
@@ -207,7 +215,10 @@ static int usb_dc_stm32_clock_enable(void)
 	defined(CONFIG_SOC_SERIES_STM32H7X) || \
 	defined(CONFIG_SOC_SERIES_STM32L5X) || \
 	defined(CONFIG_SOC_SERIES_STM32U5X)
-
+#if !STM32_HSI48_ENABLED
+	/* Deprecated: enable HSI48 using device tree */
+#warning USB device requires HSI48 clock to be enabled using device tree
+#endif /* ! STM32_HSI48_ENABLED*/
 	/*
 	 * In STM32L0 series, HSI48 requires VREFINT and its buffer
 	 * with 48 MHz RC to be enabled.
@@ -226,6 +237,7 @@ static int usb_dc_stm32_clock_enable(void)
 
 	z_stm32_hsem_lock(CFG_HW_CLK48_CONFIG_SEMID, HSEM_LOCK_DEFAULT_RETRY);
 
+	/* Keeping this sequence for legacy: */
 	LL_RCC_HSI48_Enable();
 	while (!LL_RCC_HSI48_IsReady()) {
 		/* Wait for HSI48 to become ready */
@@ -332,10 +344,12 @@ static int usb_dc_stm32_clock_enable(void)
 	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_OTGHSULPI);
 	LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_OTGPHYC);
 #elif defined(CONFIG_SOC_SERIES_STM32H7X)
+#if !USB_OTG_HS_ULPI_PHY
 	/* Disable ULPI interface (for external high-speed PHY) clock in sleep
 	 * mode.
 	 */
 	LL_AHB1_GRP1_DisableClockSleep(LL_AHB1_GRP1_PERIPH_USB1OTGHSULPI);
+#endif
 #else
 	/* Disable ULPI interface (for external high-speed PHY) clock in low
 	 * power mode. It is disabled by default in run power mode, no need to
@@ -371,7 +385,7 @@ static uint32_t usb_dc_stm32_get_maximum_speed(void)
 	 * If max-speed is not passed via DT, set it to USB controller's
 	 * maximum hardware capability.
 	 */
-#if USB_OTG_HS_EMB_PHY
+#if USB_OTG_HS_EMB_PHY || USB_OTG_HS_ULPI_PHY
 	uint32_t speed = USB_OTG_SPEED_HIGH;
 #else
 	uint32_t speed = USB_OTG_SPEED_FULL;
@@ -401,6 +415,7 @@ static uint32_t usb_dc_stm32_get_maximum_speed(void)
 static int usb_dc_stm32_init(void)
 {
 	HAL_StatusTypeDef status;
+	int ret;
 	unsigned int i;
 
 #if defined(USB) || defined(USB_DRD_FS)
@@ -424,6 +439,8 @@ static int usb_dc_stm32_init(void)
 	usb_dc_stm32_state.pcd.Init.speed = usb_dc_stm32_get_maximum_speed();
 #if USB_OTG_HS_EMB_PHY
 	usb_dc_stm32_state.pcd.Init.phy_itface = USB_OTG_HS_EMBEDDED_PHY;
+#elif USB_OTG_HS_ULPI_PHY
+	usb_dc_stm32_state.pcd.Init.phy_itface = USB_OTG_ULPI_PHY;
 #else
 	usb_dc_stm32_state.pcd.Init.phy_itface = PCD_PHY_EMBEDDED;
 #endif
@@ -462,10 +479,10 @@ static int usb_dc_stm32_init(void)
 #endif
 
 	LOG_DBG("Pinctrl signals configuration");
-	status = pinctrl_apply_state(usb_pcfg, PINCTRL_STATE_DEFAULT);
-	if (status < 0) {
-		LOG_ERR("USB pinctrl setup failed (%d)", status);
-		return status;
+	ret = pinctrl_apply_state(usb_pcfg, PINCTRL_STATE_DEFAULT);
+	if (ret < 0) {
+		LOG_ERR("USB pinctrl setup failed (%d)", ret);
+		return ret;
 	}
 
 	LOG_DBG("HAL_PCD_Init");
@@ -552,6 +569,19 @@ int usb_dc_attach(void)
 	} else {
 		LOG_ERR("System Configuration Controller clock is "
 			"disabled. Unable to enable pin remapping.");
+	}
+#endif
+
+#if USB_OTG_HS_ULPI_PHY
+	if (ulpi_reset.port != NULL) {
+		if (!device_is_ready(ulpi_reset.port)) {
+			LOG_ERR("Reset GPIO device not ready");
+			return -EINVAL;
+		}
+		if (gpio_pin_configure_dt(&ulpi_reset, GPIO_OUTPUT_INACTIVE)) {
+			LOG_ERR("Couldn't configure reset pin");
+			return -EIO;
+		}
 	}
 #endif
 

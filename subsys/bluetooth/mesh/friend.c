@@ -26,6 +26,17 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_mesh_friend);
 
+/**
+ * Log modes other than the deferred may cause unintended delays during processing of log messages.
+ * This in turns will affect scheduling of the receive delay and receive window.
+ */
+#if !defined(CONFIG_TEST) && !defined(CONFIG_ARCH_POSIX) && \
+	defined(CONFIG_LOG) && !defined(CONFIG_LOG_MODE_DEFERRED) && \
+	(LOG_LEVEL >= LOG_LEVEL_INF)
+#warning Frienship feature may work unstable when non-deferred log mode is selected. Use the \
+	 CONFIG_LOG_MODE_DEFERRED Kconfig option when Friend feature is enabled.
+#endif
+
 /* We reserve one extra buffer for each friendship, since we need to be able
  * to resend the last sent PDU, which sits separately outside of the queue.
  */
@@ -730,6 +741,23 @@ int bt_mesh_friend_poll(struct bt_mesh_net_rx *rx, struct net_buf_simple *buf)
 
 	friend_recv_delay(frnd);
 
+	if (msg->fsn == frnd->fsn && frnd->last) {
+		LOG_DBG("Re-sending last PDU");
+		frnd->send_last = 1U;
+	} else {
+		if (frnd->last) {
+			net_buf_unref(frnd->last);
+			frnd->last = NULL;
+		}
+
+		frnd->fsn = msg->fsn;
+
+		if (sys_slist_is_empty(&frnd->queue)) {
+			enqueue_update(frnd, 0);
+			LOG_DBG("Enqueued Friend Update to empty queue");
+		}
+	}
+
 	STRUCT_SECTION_FOREACH(bt_mesh_friend_cb, cb) {
 		if (cb->polled) {
 			cb->polled(frnd->subnet->net_idx, frnd->lpn);
@@ -745,23 +773,6 @@ int bt_mesh_friend_poll(struct bt_mesh_net_rx *rx, struct net_buf_simple *buf)
 				cb->established(frnd->subnet->net_idx, frnd->lpn, frnd->recv_delay,
 						frnd->poll_to);
 			}
-		}
-	}
-
-	if (msg->fsn == frnd->fsn && frnd->last) {
-		LOG_DBG("Re-sending last PDU");
-		frnd->send_last = 1U;
-	} else {
-		if (frnd->last) {
-			net_buf_unref(frnd->last);
-			frnd->last = NULL;
-		}
-
-		frnd->fsn = msg->fsn;
-
-		if (sys_slist_is_empty(&frnd->queue)) {
-			enqueue_update(frnd, 0);
-			LOG_DBG("Enqueued Friend Update to empty queue");
 		}
 	}
 
