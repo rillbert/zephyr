@@ -207,6 +207,9 @@ void IRAM_ATTR esp_restart_noos(void)
 	/* Disable interrupts */
 	z_xt_ints_off(0xFFFFFFFF);
 
+	// switch to XTAL (otherwise we will keep running from the PLL)
+	rtc_clk_cpu_freq_set_xtal();
+
 	const uint32_t core_id = cpu_hal_get_core_id();
 	const uint32_t other_core_id = (core_id == 0) ? 1 : 0;
 
