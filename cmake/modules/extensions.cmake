@@ -436,7 +436,7 @@ endmacro()
 # ZEPHYR_MODULE/drivers/entropy/CMakeLists.txt
 # with content:
 # zephyr_library_amend()
-# zephyr_library_add_sources(...)
+# zephyr_library_sources(...)
 #
 # It is also possible to use generator expression when amending to Zephyr
 # libraries.
@@ -4120,7 +4120,7 @@ endfunction()
 # BAZ: <undefined>
 # QUX: option set
 #
-# will create a list as: "FOO;bar;QUX:TRUE" which can then be parsed as argument
+# will create a list as: "FOO;bar;QUX;TRUE" which can then be parsed as argument
 # list later.
 macro(zephyr_linker_arg_val_list list arguments)
   foreach(arg ${arguments})

@@ -47,7 +47,7 @@ manifest:
       groups:
         - fs
     - name: hal_espressif
-      revision: a7590d34f28bb1cd3de28847db3f4d31c38ae41d
+      revision: 1a2292632131d09549b527917cfd0ad7cd78338c
       path: modules/hal/espressif
       west-commands: west/west-commands.yml
       groups:
@@ -85,7 +85,7 @@ manifest:
       groups:
         - crypto
     - name: mcuboot
-      revision: cfec947e0f8be686d02c73104a3b1ad0b5dcf1e6
+      revision: dd59d907639b81f3c0556ebf6e9249f85482b407
       path: bootloader/mcuboot
     - name: mipi-sys-t
       path: modules/debug/mipi-sys-t
@@ -113,7 +113,7 @@ manifest:
       path: modules/lib/picolibc
       revision: 04ada5951cbaf8e7b17f8226ce31cb6837c28ba7
     - name: segger
-      revision: d4e568a920b4bd087886170a5624c167b2d0665e
+      revision: e2ff2200556e8a8f962921444275c04971a2bb3d
       path: modules/debug/segger
       groups:
         - debug
@@ -138,7 +138,7 @@ manifest:
       groups:
         - debug
     - name: trusted-firmware-m
-      revision: 887798f6e67203e6a77059a86edf41bb136a3c0b
+      revision: 13abde213930ffdf600cf8f01113da8a5fdd9d9c
       path: modules/tee/tf-m/trusted-firmware-m
       groups:
         - tee
@@ -165,7 +165,7 @@ manifest:
       path: modules/lib/zcbor
     - name: zscilib
       path: modules/lib/zscilib
-      revision: ca070ddabdaf67175a2da901d0bd62e8899371c5
+      revision: 0035be5e6a45e4ab89755b176d305d7a877fc79c
 
   self:
     path: zephyr

@@ -1033,13 +1033,18 @@ static int cmd_qos(const struct shell *sh, size_t argc, char *argv[])
 	}
 
 	if (default_unicast_group == NULL) {
-		struct bt_audio_unicast_group_param params = {
+		struct bt_audio_unicast_group_stream_param stream_param = {
 			.stream = default_stream,
 			.qos = &default_preset->preset.qos,
 			.dir = stream_dir(default_stream)
 		};
+		struct bt_audio_unicast_group_param param = {
+			.packing = BT_ISO_PACKING_SEQUENTIAL,
+			.params = &stream_param,
+			.params_count = 1,
+		};
 
-		err = bt_audio_unicast_group_create(&params, 1, &default_unicast_group);
+		err = bt_audio_unicast_group_create(&param, &default_unicast_group);
 		if (err != 0) {
 			shell_error(sh, "Unable to create default unicast group: %d", err);
 			return -ENOEXEC;
@@ -1529,7 +1534,7 @@ static int cmd_create_broadcast(const struct shell *sh, size_t argc,
 	struct bt_audio_broadcast_source_stream_param
 		stream_params[ARRAY_SIZE(broadcast_source_streams)];
 	struct bt_audio_broadcast_source_subgroup_param subgroup_param;
-	struct bt_audio_broadcast_source_create_param create_param;
+	struct bt_audio_broadcast_source_create_param create_param = { 0 };
 	struct named_lc3_preset *named_preset;
 	int err;
 
@@ -1540,12 +1545,51 @@ static int cmd_create_broadcast(const struct shell *sh, size_t argc,
 
 	named_preset = default_preset;
 
-	if (argc > 1) {
-		named_preset = set_preset(false, 1, &argv[1]);
-		if (named_preset == NULL) {
-			shell_error(sh, "Unable to parse named_preset %s",
-				    argv[1]);
-			return -ENOEXEC;
+	for (size_t i = 1U; i < argc; i++) {
+		char *arg = argv[i];
+
+		if (strcmp(arg, "enc") == 0) {
+			if (argc > i) {
+				size_t bcode_len;
+
+				i++;
+				arg = argv[i];
+
+				bcode_len = hex2bin(arg, strlen(arg),
+						    create_param.broadcast_code,
+						    sizeof(create_param.broadcast_code));
+
+				if (bcode_len != sizeof(create_param.broadcast_code)) {
+					shell_error(sh, "Invalid Broadcast Code Length: %zu",
+						    bcode_len);
+
+					return -ENOEXEC;
+				}
+
+				create_param.encryption = true;
+			} else {
+				shell_help(sh);
+
+				return SHELL_CMD_HELP_PRINTED;
+			}
+		} else if (strcmp(arg, "preset") == 0) {
+			if (argc > i) {
+
+				i++;
+				arg = argv[i];
+
+				named_preset = set_preset(false, 1, &arg);
+				if (named_preset == NULL) {
+					shell_error(sh, "Unable to parse named_preset %s",
+						    arg);
+
+					return -ENOEXEC;
+				}
+			} else {
+				shell_help(sh);
+
+				return SHELL_CMD_HELP_PRINTED;
+			}
 		}
 	}
 
@@ -1950,7 +1994,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(audio_cmds,
 #if defined(CONFIG_BT_AUDIO_BROADCAST_SOURCE)
 	SHELL_CMD_ARG(select_broadcast, NULL, "<stream>",
 		      cmd_select_broadcast_source, 2, 0),
-	SHELL_CMD_ARG(create_broadcast, NULL, "[codec] [preset]",
+	SHELL_CMD_ARG(create_broadcast, NULL,
+		      "[preset <preset_name>] [enc <broadcast_code>]",
 		      cmd_create_broadcast, 1, 2),
 	SHELL_CMD_ARG(start_broadcast, NULL, "", cmd_start_broadcast, 1, 0),
 	SHELL_CMD_ARG(stop_broadcast, NULL, "", cmd_stop_broadcast, 1, 0),

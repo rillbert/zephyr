@@ -36,19 +36,27 @@ LOG_MODULE_REGISTER(usb_dc_stm32);
 #error "Only one interface should be enabled at a time, OTG FS or OTG HS"
 #endif
 
+/*
+ * Vbus sensing is determined based on the presence of the hardware detection
+ * pin(s) in the device tree. E.g: pinctrl-0 = <&usb_otg_fs_vbus_pa9 ...>;
+ *
+ * The detection pins are dependent on the enabled USB driver and the physical
+ * interface(s) offered by the hardware. These are mapped to PA9 and/or PB13
+ * (subject to MCU), being the former the most widespread option.
+ */
 #if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs)
-#define DT_DRV_COMPAT st_stm32_otghs
-#define USB_IRQ_NAME  otghs
+#define DT_DRV_COMPAT    st_stm32_otghs
+#define USB_IRQ_NAME     otghs
+#define USB_VBUS_SENSING (DT_NODE_EXISTS(DT_CHILD(DT_NODELABEL(pinctrl), usb_otg_hs_vbus_pa9)) || \
+			  DT_NODE_EXISTS(DT_CHILD(DT_NODELABEL(pinctrl), usb_otg_hs_vbus_pb13)))
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otgfs)
-#define DT_DRV_COMPAT st_stm32_otgfs
-#define USB_IRQ_NAME  otgfs
+#define DT_DRV_COMPAT    st_stm32_otgfs
+#define USB_IRQ_NAME     otgfs
+#define USB_VBUS_SENSING DT_NODE_EXISTS(DT_CHILD(DT_NODELABEL(pinctrl), usb_otg_fs_vbus_pa9))
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_usb)
-#define DT_DRV_COMPAT st_stm32_usb
-#define USB_IRQ_NAME  usb
-#if DT_INST_PROP(0, enable_pin_remap)
-#define USB_ENABLE_PIN_REMAP	DT_INST_PROP(0, enable_pin_remap)
-#warning "Property deprecated in favor of property 'remap-pa11-pa12' from 'st-stm32-pinctrl'"
-#endif
+#define DT_DRV_COMPAT    st_stm32_usb
+#define USB_IRQ_NAME     usb
+#define USB_VBUS_SENSING false
 #endif
 
 #define USB_BASE_ADDRESS	DT_INST_REG_ADDR(0)
@@ -281,53 +289,14 @@ static int usb_dc_stm32_clock_enable(void)
 	}
 #endif /* STM32_MSI_PLL_MODE && !STM32_SYSCLK_SRC_MSI */
 
-#elif defined(RCC_CFGR_OTGFSPRE)
-	/* On STM32F105 and STM32F107 parts the USB OTGFSCLK is derived from
-	 * PLL1, and must result in a 48 MHz clock... the options to achieve
-	 * this are as below, controlled by the RCC_CFGR_OTGFSPRE bit.
-	 *   - PLLCLK * 2 / 2     i.e: PLLCLK == 48 MHz
-	 *   - PLLCLK * 2 / 3     i.e: PLLCLK == 72 MHz
-	 *
-	 * this requires that the system is running from PLLCLK
-	 */
-	if (LL_RCC_GetSysClkSource() == LL_RCC_SYS_CLKSOURCE_STATUS_PLL) {
-		switch (sys_clock_hw_cycles_per_sec()) {
-		case MHZ(48):
-			LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_PLL_DIV_2);
-			break;
-		case MHZ(72):
-			LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_PLL_DIV_3);
-			break;
-		default:
-			LOG_ERR("Unable to set USB clock source (incompatible PLLCLK rate)");
-			return -EIO;
-		}
-	} else {
-		LOG_ERR("Unable to set USB clock source (not using PLL1)");
-		return -EIO;
-	}
-#elif defined(RCC_CFGR_USBPRE)
-	/* on other STM32F1 family SOCs, we have a simple /1 or /1.5 divider on
-	 * the back of the RCC.  Similar strategy to the above, but we use the
-	 * correct flags
-	 */
-	if (LL_RCC_GetSysClkSource() == LL_RCC_SYS_CLKSOURCE_STATUS_PLL) {
-		switch (sys_clock_hw_cycles_per_sec()) {
-		case MHZ(48):
-			LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_PLL);
-			break;
-		case MHZ(72):
-			LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_PLL_DIV_1_5);
-			break;
-		default:
-			LOG_ERR("Unable to set USB clock source (incompatible PLLCLK rate)");
-			return -EIO;
-		}
-	} else {
-		LOG_ERR("Unable to set USB clock source (not using PLL1)");
-		return -EIO;
-	}
-#endif /* RCC_HSI48_SUPPORT / LL_RCC_USB_CLKSOURCE_NONE / RCC_CFGR_OTGFSPRE / RCC_CFGR_USBPRE */
+#elif defined(RCC_CFGR_OTGFSPRE) || defined(RCC_CFGR_USBPRE)
+
+#if (MHZ(48) == CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC) && !defined(STM32_PLL_USBPRE)
+	/* PLL output clock is set to 48MHz, it should not be divided */
+#warning USBPRE/OTGFSPRE should be set in rcc node
+#endif
+
+#endif /* RCC_HSI48_SUPPORT / LL_RCC_USB_CLKSOURCE_NONE */
 
 	if (!device_is_ready(clk)) {
 		LOG_ERR("clock control device not ready");
@@ -445,7 +414,7 @@ static int usb_dc_stm32_init(void)
 	usb_dc_stm32_state.pcd.Init.phy_itface = PCD_PHY_EMBEDDED;
 #endif
 	usb_dc_stm32_state.pcd.Init.ep0_mps = USB_OTG_MAX_EP0_SIZE;
-	usb_dc_stm32_state.pcd.Init.vbus_sensing_enable = DISABLE;
+	usb_dc_stm32_state.pcd.Init.vbus_sensing_enable = USB_VBUS_SENSING ? ENABLE : DISABLE;
 
 #ifndef CONFIG_SOC_SERIES_STM32F1X
 	usb_dc_stm32_state.pcd.Init.dma_enable = DISABLE;
@@ -556,19 +525,6 @@ int usb_dc_attach(void)
 	} else {
 		LOG_ERR("System Configuration Controller clock is "
 			"disabled. Unable to enable IRQ remapping.");
-	}
-#endif
-
-	/*
-	 * For STM32F0 series SoCs on QFN28 and TSSOP20 packages enable PIN
-	 * pair PA11/12 mapped instead of PA9/10 (e.g. stm32f070x6)
-	 */
-#if USB_ENABLE_PIN_REMAP == 1
-	if (LL_APB1_GRP2_IsEnabledClock(LL_APB1_GRP2_PERIPH_SYSCFG)) {
-		LL_SYSCFG_EnablePinRemap();
-	} else {
-		LOG_ERR("System Configuration Controller clock is "
-			"disabled. Unable to enable pin remapping.");
 	}
 #endif
 
