@@ -81,7 +81,9 @@ void bt_audio_stream_attach(struct bt_conn *conn,
 	if (conn != NULL) {
 		__ASSERT(stream->conn == NULL || stream->conn == conn,
 			 "stream->conn %p already attached", stream->conn);
-		stream->conn = bt_conn_ref(conn);
+		if (stream->conn == NULL) {
+			stream->conn = bt_conn_ref(conn);
+		}
 	}
 	stream->codec = codec;
 	stream->ep = ep;
@@ -728,18 +730,6 @@ int bt_audio_stream_connect(struct bt_audio_stream *stream)
 	}
 }
 
-static bool unicast_group_valid_qos(const struct bt_codec_qos *group_qos,
-				    const struct bt_codec_qos *stream_qos)
-{
-	if (group_qos->framing != stream_qos->framing ||
-	    group_qos->interval != stream_qos->interval ||
-	    group_qos->latency != stream_qos->latency) {
-		return false;
-	}
-
-	return true;
-}
-
 static struct bt_audio_iso *get_new_iso(struct bt_audio_unicast_group *group,
 					struct bt_conn *acl,
 					enum bt_audio_dir dir)
@@ -1020,10 +1010,6 @@ int bt_audio_unicast_group_create(struct bt_audio_unicast_group_param *param,
 
 		if (group_qos == NULL) {
 			group_qos = stream_param->qos;
-		} else if (!unicast_group_valid_qos(group_qos,
-						    stream_param->qos)) {
-			LOG_DBG("Stream[%zu] QoS incompatible with group QoS", i);
-			return -EINVAL;
 		}
 
 		CHECKIF(!bt_audio_valid_qos(stream_param->qos)) {
@@ -1109,9 +1095,6 @@ int bt_audio_unicast_group_add_streams(struct bt_audio_unicast_group *unicast_gr
 
 		if (group_qos == NULL) {
 			group_qos = params[i].qos;
-		} else if (!unicast_group_valid_qos(group_qos, params[i].qos)) {
-			LOG_DBG("Stream[%zu] QoS incompatible with group QoS", i);
-			return -EINVAL;
 		}
 	}
 

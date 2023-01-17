@@ -26,10 +26,10 @@ manifest:
   # Please add items below based on alphabetical order
   projects:
     - name: canopennode
-      revision: 53d3415c14d60f8f4bfca54bfbc5d5a667d7e724
+      revision: dec12fa3f0d790cafa8414a4c2930ea71ab72ffd
       path: modules/lib/canopennode
     - name: chre
-      revision: fe0ab36e0fa7453a4c9b97bedac89709f45cf965
+      revision: b7955c27e50485b7dafdc3888d7d6afdc2ac6d96
       path: modules/lib/chre
     - name: cmsis
       revision: 74981bf893e8b10931464b9945e2143d99a3f0a3
@@ -47,7 +47,7 @@ manifest:
       groups:
         - fs
     - name: hal_espressif
-      revision: 1a2292632131d09549b527917cfd0ad7cd78338c
+      revision: 73e7af1e2ed64571ce49ff9f07dc02690b9f2df5
       path: modules/hal/espressif
       west-commands: west/west-commands.yml
       groups:
@@ -124,9 +124,6 @@ manifest:
       revision: 9156d050927012da87079064db59d07f03b8baf6
       path: modules/lib/tflite-micro
       repo-path: tflite-micro
-    - name: tinycbor
-      revision: 9e1f34bc08123aaad7666d3652aaa839e8178b3b
-      path: modules/lib/tinycbor
     - name: tinycrypt
       revision: 3e9a49d2672ec01435ffbf0d788db6d95ef28de0
       path: modules/crypto/tinycrypt
