@@ -388,6 +388,10 @@ include(cmake/extra_flags.cmake)
 
 zephyr_cc_option(-fno-asynchronous-unwind-tables)
 
+if(CONFIG_USERSPACE)
+  zephyr_compile_options($<TARGET_PROPERTY:compiler,no_global_merge>)
+endif()
+
 if(CONFIG_THREAD_LOCAL_STORAGE)
 # Only support local exec TLS model at this point.
 zephyr_cc_option(-ftls-model=local-exec)
@@ -611,7 +615,7 @@ execute_process(
   ${ZEPHYR_BASE}/scripts/build/subfolder_list.py
   --directory        ${ZEPHYR_BASE}/include      # Walk this directory
   --out-file         ${syscalls_subdirs_txt}     # Write file with discovered folder
-  --trigger          ${syscalls_subdirs_trigger} # Trigger file that is used for json generation
+  --trigger-file     ${syscalls_subdirs_trigger} # Trigger file that is used for json generation
   ${syscalls_links}                              # If defined, create symlinks for dependencies
 )
 file(STRINGS ${syscalls_subdirs_txt} PARSE_SYSCALLS_PATHS_DEPENDS ENCODING UTF-8)
@@ -644,7 +648,7 @@ else()
     ${ZEPHYR_BASE}/scripts/build/subfolder_list.py
     --directory        ${ZEPHYR_BASE}/include      # Walk this directory
     --out-file         ${syscalls_subdirs_txt}     # Write file with discovered folder
-    --trigger          ${syscalls_subdirs_trigger} # Trigger file that is used for json generation
+    --trigger-file     ${syscalls_subdirs_trigger} # Trigger file that is used for json generation
     ${syscalls_links}                              # If defined, create symlinks for dependencies
     DEPENDS ${PARSE_SYSCALLS_PATHS_DEPENDS}
   )
@@ -740,7 +744,7 @@ add_custom_command(OUTPUT include/generated/syscall_dispatch.c ${syscall_list_h}
   )
 
 # This is passed into all calls to the gen_kobject_list.py script.
-set(gen_kobject_list_include_args --include ${struct_tags_json})
+set(gen_kobject_list_include_args --include-subsystem-list ${struct_tags_json})
 
 set(DRV_VALIDATION ${PROJECT_BINARY_DIR}/include/generated/driver-validation.h)
 add_custom_command(

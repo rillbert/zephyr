@@ -25,6 +25,8 @@
 
 #include "ticker/ticker.h"
 
+#include "pdu_df.h"
+#include "lll/pdu_vendor.h"
 #include "pdu.h"
 
 #include "lll.h"
@@ -54,7 +56,7 @@
 #include "ull_sched_internal.h"
 #include "ull_chan_internal.h"
 #include "ull_conn_internal.h"
-#include "ull_periph_internal.h"
+#include "ull_peripheral_internal.h"
 #include "ull_central_internal.h"
 
 #include "ull_iso_internal.h"
@@ -2341,7 +2343,7 @@ void ull_pdu_data_init(struct pdu_data *pdu)
 {
 #if defined(CONFIG_BT_CTLR_DF_CONN_CTE_TX) || defined(CONFIG_BT_CTLR_DF_CONN_CTE_RX)
 	pdu->cp = 0U;
-	pdu->resv = 0U;
+	pdu->octet3.resv[0] = 0U;
 #endif /* CONFIG_BT_CTLR_DF_CONN_CTE_TX || CONFIG_BT_CTLR_DF_CONN_CTE_RX */
 }
 
@@ -3302,6 +3304,19 @@ static inline int event_conn_upd_prep(struct ll_conn *conn, uint16_t lazy,
 					     llctrl.conn_update_ind.win_offset);
 			tx = CONTAINER_OF(pdu_ctrl_tx, struct node_tx, pdu);
 			ctrl_tx_enqueue(conn, tx);
+
+			/* Acquire the reserved Rx node */
+			rx = conn->llcp_rx;
+			LL_ASSERT(rx && rx->hdr.link);
+			conn->llcp_rx = rx->hdr.link->mem;
+
+			/* Mark for buffer for release */
+			rx->hdr.type = NODE_RX_TYPE_RELEASE;
+
+			/* enqueue rx node towards Thread */
+			ll_rx_put(rx->hdr.link, rx);
+			ll_rx_sched();
+
 			return -ECANCELED;
 #endif /* CONFIG_BT_CTLR_CONN_PARAM_REQ */
 
@@ -8064,12 +8079,25 @@ uint16_t ull_conn_event_counter(struct ll_conn *conn)
 	struct lll_conn *lll;
 	uint16_t event_counter;
 
-	uint16_t lazy = conn->llcp.prep.lazy;
-
 	lll = &conn->lll;
 
-	/* Calculate current event counter */
-	event_counter = lll->event_counter + lll->latency_prepare + lazy;
+	/* Calculate current event counter. If refcount is non-zero, we have called
+	 * prepare and the LLL implementation has calculated and incremented the event
+	 * counter (RX path). In this case we need to subtract one from the current
+	 * event counter.
+	 * Otherwise we are in the TX path, and we calculate the current event counter
+	 * similar to LLL by taking the expected event counter value plus accumulated
+	 * latency.
+	 */
+	if (ull_ref_get(&conn->ull)) {
+		/* We are in post-prepare (RX path). Event counter is already
+		 * calculated and incremented by 1 for next event.
+		 */
+		event_counter = lll->event_counter - 1;
+	} else {
+		event_counter = lll->event_counter + lll->latency_prepare +
+				conn->llcp.prep.lazy;
+	}
 
 	return event_counter;
 }

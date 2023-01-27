@@ -13,6 +13,7 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/flash_controller/ospi.h>
 #include <zephyr/dt-bindings/reset/stm32u5_reset.h>
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
 #include <freq.h>
 
 / {
@@ -556,6 +557,14 @@
 			status = "disabled";
 		};
 
+		aes: aes@420c0000 {
+			compatible = "st,stm32-aes";
+			reg = <0x420c0000 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00010000>;
+			interrupts = <93 0>;
+			status = "disabled";
+		};
+
 		rng: rng@420c0800 {
 			compatible = "st,stm32-rng";
 			reg = <0x420c0800 0x400>;
@@ -581,9 +590,9 @@
 			interrupts = <37 0>;
 			status = "disabled";
 			#io-channel-cells = <1>;
-			has-vbat-channel;
-			has-temp-channel;
-			has-vref-channel;
+			temp-channel = <19>;
+			vref-channel = <0>;
+			vbat-channel = <18>;
 		};
 
 		adc4: adc@46021000 {
@@ -593,9 +602,9 @@
 			interrupts = <113 0>;
 			status = "disabled";
 			#io-channel-cells = <1>;
-			has-vbat-channel;
-			has-temp-channel;
-			has-vref-channel;
+			temp-channel = <13>;
+			vref-channel = <0>;
+			vbat-channel = <14>;
 		};
 
 		can {

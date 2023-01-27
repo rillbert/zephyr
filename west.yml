@@ -25,12 +25,6 @@ manifest:
   #
   # Please add items below based on alphabetical order
   projects:
-    - name: canopennode
-      revision: dec12fa3f0d790cafa8414a4c2930ea71ab72ffd
-      path: modules/lib/canopennode
-    - name: chre
-      revision: b7955c27e50485b7dafdc3888d7d6afdc2ac6d96
-      path: modules/lib/chre
     - name: cmsis
       revision: 74981bf893e8b10931464b9945e2143d99a3f0a3
       path: modules/hal/cmsis
@@ -62,9 +56,6 @@ manifest:
       path: modules/hal/libmetal
       groups:
         - hal
-    - name: liblc3
-      revision: 448f3de31f49a838988a162ef1e23a89ddf2d2ed
-      path: modules/lib/liblc3
     - name: littlefs
       path: modules/fs/littlefs
       groups:
@@ -73,9 +64,6 @@ manifest:
     - name: loramac-node
       revision: ce57712f3e426bbbb13acaec97b45369f716f43a
       path: modules/lib/loramac-node
-    - name: lvgl
-      revision: 5ab83099854719ed326b6ecb9b09b07b1eee4818
-      path: modules/lib/gui/lvgl
     - name: lz4
       revision: 8e303c264fc21c2116dc612658003a22e933124d
       path: modules/lib/lz4
@@ -101,7 +89,7 @@ manifest:
       groups:
         - tools
     - name: nrf_hw_models
-      revision: 85ecf8e3bda805fa1405db5048d77e2980c976f0
+      revision: d8f125e1988221ebfea5944fc3118f1780787ccc
       path: modules/bsim_hw_models/nrf_hw_models
     - name: open-amp
       revision: aedcc262f93bbb1b0c2f58026911575729b7465c
@@ -111,12 +99,7 @@ manifest:
       path: modules/lib/openthread
     - name: picolibc
       path: modules/lib/picolibc
-      revision: 04ada5951cbaf8e7b17f8226ce31cb6837c28ba7
-    - name: segger
-      revision: e2ff2200556e8a8f962921444275c04971a2bb3d
-      path: modules/debug/segger
-      groups:
-        - debug
+      revision: 98e59b70d6ef8eb18f7dccc3d39cecaa0658fa4f
     - name: sof
       revision: 6f5f7258ad2738df78e600568d38fc261e2a118d
       path: modules/audio/sof
