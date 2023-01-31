@@ -455,6 +455,7 @@ SECTIONS
 #endif
 
     *(.ext_ram.bss*)
+    *libmodules__mbedtls.a:*(.bss._mbedtls_heap)
     _ext_ram_data_end = ABSOLUTE(.) + CONFIG_ESP_SPIRAM_SIZE;
   } GROUP_LINK_IN(ext_ram_seg)
 #endif
