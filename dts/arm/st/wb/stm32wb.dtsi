@@ -12,6 +12,7 @@
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/adc/adc.h>
 #include <zephyr/dt-bindings/pwm/stm32_pwm.h>
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
 #include <zephyr/dt-bindings/reset/stm32wb_l_reset.h>
 #include <freq.h>
 
@@ -372,10 +373,7 @@
 			clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00002000>;
 			interrupts = <18 0>;
 			status = "disabled";
-			vref-mv = <3300>;
 			#io-channel-cells = <1>;
-			has-temp-channel;
-			has-vref-channel;
 		};
 
 		iwdg: watchdog@40003000 {
