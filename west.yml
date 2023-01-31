@@ -25,12 +25,6 @@ manifest:
   #
   # Please add items below based on alphabetical order
   projects:
-    - name: canopennode
-      revision: dec12fa3f0d790cafa8414a4c2930ea71ab72ffd
-      path: modules/lib/canopennode
-    - name: chre
-      revision: b7955c27e50485b7dafdc3888d7d6afdc2ac6d96
-      path: modules/lib/chre
     - name: cmsis
       revision: 74981bf893e8b10931464b9945e2143d99a3f0a3
       path: modules/hal/cmsis
@@ -47,7 +41,8 @@ manifest:
       groups:
         - fs
     - name: hal_espressif
-      revision: 73e7af1e2ed64571ce49ff9f07dc02690b9f2df5
+      revision: 6edb720e7178ad77e30451c377458af545614367
+      # revision: 73e7af1e2ed64571ce49ff9f07dc02690b9f2df5
       path: modules/hal/espressif
       west-commands: west/west-commands.yml
       groups:
@@ -62,9 +57,6 @@ manifest:
       path: modules/hal/libmetal
       groups:
         - hal
-    - name: liblc3
-      revision: 448f3de31f49a838988a162ef1e23a89ddf2d2ed
-      path: modules/lib/liblc3
     - name: littlefs
       path: modules/fs/littlefs
       groups:
@@ -73,9 +65,6 @@ manifest:
     - name: loramac-node
       revision: ce57712f3e426bbbb13acaec97b45369f716f43a
       path: modules/lib/loramac-node
-    - name: lvgl
-      revision: 5ab83099854719ed326b6ecb9b09b07b1eee4818
-      path: modules/lib/gui/lvgl
     - name: lz4
       revision: 8e303c264fc21c2116dc612658003a22e933124d
       path: modules/lib/lz4
@@ -112,11 +101,6 @@ manifest:
     - name: picolibc
       path: modules/lib/picolibc
       revision: 98e59b70d6ef8eb18f7dccc3d39cecaa0658fa4f
-    - name: segger
-      revision: e2ff2200556e8a8f962921444275c04971a2bb3d
-      path: modules/debug/segger
-      groups:
-        - debug
     - name: sof
       revision: 6f5f7258ad2738df78e600568d38fc261e2a118d
       path: modules/audio/sof
