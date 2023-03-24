@@ -72,7 +72,9 @@
 	defined(CONFIG_BOARD_PAN1781_EVB) || \
 	defined(CONFIG_BOARD_PAN1782_EVB) || \
 	defined(CONFIG_BOARD_PAN1770_EVB) || \
-	defined(CONFIG_BOARD_XIAO_BLE)
+	defined(CONFIG_BOARD_XIAO_BLE)	|| \
+	defined(CONFIG_BOARD_RAYTAC_MDBT50Q_DB_33_NRF52833) || \
+	defined(CONFIG_BOARD_RAYTAC_MDBT50Q_DB_40_NRF52840)
 
 #include <hal/nrf_saadc.h>
 #define ADC_DEVICE_NODE		DT_INST(0, nordic_nrf_saadc)
@@ -187,6 +189,16 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 #define ADC_1ST_CHANNEL_ID	0
 
+#elif defined(CONFIG_BOARD_SAM4S_XPLAINED)
+
+#define ADC_DEVICE_NODE		DT_INST(0, atmel_sam_adc)
+#define ADC_RESOLUTION		12
+#define ADC_GAIN		ADC_GAIN_1
+#define ADC_REFERENCE		ADC_REF_EXTERNAL0
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_1ST_CHANNEL_ID	15
+#define ADC_1ST_CHANNEL_INPUT	15
+
 #elif defined(CONFIG_SOC_FAMILY_SAM0)
 #include <soc.h>
 #define ADC_DEVICE_NODE         DT_INST(0, atmel_sam0_adc)
@@ -238,6 +250,14 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 /* Some F3 series SOCs do not have channel 0 connected to an external GPIO. */
 #define ADC_1ST_CHANNEL_ID	1
+
+#elif defined(CONFIG_BOARD_STM32H735G_DISCO)
+#define ADC_DEVICE_NODE         DT_INST(0, st_stm32_adc)
+#define ADC_RESOLUTION		16
+#define ADC_GAIN		ADC_GAIN_1
+#define ADC_REFERENCE		ADC_REF_INTERNAL
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_1ST_CHANNEL_ID	0
 
 #elif defined(CONFIG_BOARD_NUCLEO_L476RG) || \
 	defined(CONFIG_BOARD_BLACKPILL_F411CE) || \
@@ -313,6 +333,7 @@
 	defined(CONFIG_BOARD_MIMXRT1170_EVK_CM7) || \
 	defined(CONFIG_BOARD_MIMXRT685_EVK) || \
 	defined(CONFIG_BOARD_MIMXRT595_EVK)
+#include <zephyr/dt-bindings/adc/mcux-lpadc.h>
 #define ADC_DEVICE_NODE		DT_INST(0, nxp_lpc_lpadc)
 #define ADC_RESOLUTION		12
 #define ADC_GAIN		ADC_GAIN_1
@@ -320,6 +341,8 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 #define ADC_1ST_CHANNEL_ID	0
 #define ADC_2ND_CHANNEL_ID	1
+#define ADC_1ST_CHANNEL_INPUT	MCUX_LPADC_CH0A
+#define ADC_2ND_CHANNEL_INPUT	MCUX_LPADC_CH1A
 
 #elif defined(CONFIG_BOARD_NPCX7M6FB_EVB) || \
 	defined(CONFIG_BOARD_NPCX9M6F_EVB)

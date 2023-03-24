@@ -39,6 +39,7 @@
 
 static int init_reset(void);
 static int prepare_cb(struct lll_prepare_param *p);
+static void abort_cb(struct lll_prepare_param *prepare_param, void *param);
 static void isr_rx(void *param);
 static void isr_tx(void *param);
 static void isr_prepare_subevent(void *param);
@@ -102,7 +103,7 @@ void lll_peripheral_iso_prepare(void *param)
 	}
 
 	/* Invoke common pipeline handling of prepare */
-	err = lll_prepare(lll_is_abort_cb, lll_abort_cb, prepare_cb, 0U, param);
+	err = lll_prepare(lll_is_abort_cb, abort_cb, prepare_cb, 0U, param);
 	LL_ASSERT(!err || err == -EINPROGRESS);
 }
 
@@ -335,6 +336,36 @@ static int prepare_cb(struct lll_prepare_param *p)
 	return 0;
 }
 
+static void abort_cb(struct lll_prepare_param *prepare_param, void *param)
+{
+	int err;
+
+	/* NOTE: This is not a prepare being cancelled */
+	if (!prepare_param) {
+		struct lll_conn_iso_group *cig_lll = param;
+		struct lll_conn_iso_stream *cis_lll;
+
+		cis_lll = ull_conn_iso_lll_stream_get_by_group(cig_lll, NULL);
+
+		/* Perform event abort here.
+		 * After event has been cleanly aborted, clean up resources
+		 * and dispatch event done.
+		 */
+		radio_isr_set(isr_done, cis_lll);
+		radio_disable();
+
+		return;
+	}
+
+	/* NOTE: Else clean the top half preparations of the aborted event
+	 * currently in preparation pipeline.
+	 */
+	err = lll_hfclock_off();
+	LL_ASSERT(err >= 0);
+
+	lll_done(param);
+}
+
 static void isr_rx(void *param)
 {
 	struct lll_conn_iso_stream *cis_lll;
@@ -457,6 +488,7 @@ static void isr_rx(void *param)
 
 		/* Rx receive */
 		if (!pdu_rx->npi &&
+		    (bn_rx <= cis_lll->rx.bn) &&
 		    (pdu_rx->sn == cis_lll->nesn) &&
 		    ull_iso_pdu_rx_alloc_peek(2U)) {
 			struct node_rx_iso_meta *iso_meta;
@@ -519,9 +551,7 @@ static void isr_rx(void *param)
 #endif /* CONFIG_BT_CTLR_LOW_LAT_ULL */
 
 			/* Increment burst number */
-			if (bn_rx <= cis_lll->rx.bn) {
-				bn_rx++;
-			}
+			bn_rx++;
 		}
 
 		/* Close Isochronous Event */
@@ -545,7 +575,9 @@ static void isr_rx(void *param)
 	}
 
 	/* Close Isochronous Event */
-	cie = (cie || (bn_rx > cis_lll->rx.bn)) && (bn_tx >= cis_lll->tx.bn);
+	cie = cie || ((bn_rx > cis_lll->rx.bn) &&
+		      (bn_tx > cis_lll->tx.bn) &&
+		      (se_curr < cis_lll->nse));
 
 	/* TODO: Get ISO data PDU */
 	if (bn_tx > cis_lll->tx.bn) {
@@ -930,7 +962,14 @@ static void isr_prepare_subevent(void *param)
 	}
 
 	start_us = radio_tmr_start_us(0U, subevent_us);
-	LL_ASSERT(start_us == (subevent_us + 1U));
+	LL_ASSERT(!trx_performed_bitmask || (start_us == (subevent_us + 1U)));
+
+	/* If no anchor point sync yet, continue to capture access address
+	 * timestamp.
+	 */
+	if (!radio_tmr_aa_restore()) {
+		radio_tmr_aa_capture();
+	}
 
 	cig_lll = ull_conn_iso_lll_group_get_by_stream(cis_lll);
 

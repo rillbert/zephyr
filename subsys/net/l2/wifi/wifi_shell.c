@@ -153,16 +153,20 @@ static void handle_wifi_twt_event(struct net_mgmt_event_callback *cb)
 	const struct wifi_twt_params *resp =
 		(const struct wifi_twt_params *)cb->info;
 
-	print(context.sh, SHELL_NORMAL, "TWT response: %s for dialog: %d and flow: %d\n",
-	      wifi_twt_setup_cmd2str[resp->setup_cmd], resp->dialog_token, resp->flow_id);
+	if (resp->resp_status == WIFI_TWT_RESP_RECEIVED) {
+		print(context.sh, SHELL_NORMAL, "TWT response: %s for dialog: %d and flow: %d\n",
+		      wifi_twt_setup_cmd2str[resp->setup_cmd], resp->dialog_token, resp->flow_id);
 
-	/* If accepted, then no need to print TWT params */
-	if (resp->setup_cmd != WIFI_TWT_SETUP_CMD_ACCEPT) {
-		print(context.sh, SHELL_NORMAL,
-		      "TWT parameters: trigger: %s wake_interval_ms: %d, interval_ms: %d\n",
-		      resp->setup.trigger ? "trigger" : "no_trigger",
-		      resp->setup.twt_wake_interval_ms,
-		      resp->setup.twt_interval_ms);
+		/* If accepted, then no need to print TWT params */
+		if (resp->setup_cmd != WIFI_TWT_SETUP_CMD_ACCEPT) {
+			print(context.sh, SHELL_NORMAL,
+			      "TWT parameters: trigger: %s wake_interval: %d us, interval: %lld us\n",
+			      resp->setup.trigger ? "trigger" : "no_trigger",
+			      resp->setup.twt_wake_interval,
+			      resp->setup.twt_interval);
+		}
+	} else {
+		print(context.sh, SHELL_NORMAL, "TWT response timed out\n");
 	}
 }
 
@@ -370,6 +374,8 @@ static int cmd_wifi_status(const struct shell *sh, size_t argc, char *argv[])
 		shell_fprintf(sh, SHELL_NORMAL, "MFP: %s\n",
 				wifi_mfp_txt(status.mfp));
 		shell_fprintf(sh, SHELL_NORMAL, "RSSI: %d\n", status.rssi);
+		shell_fprintf(sh, SHELL_NORMAL, "Beacon Interval: %d\n", status.beacon_interval);
+		shell_fprintf(sh, SHELL_NORMAL, "DTIM: %d\n", status.dtim_period);
 	}
 
 	return 0;
@@ -388,6 +394,8 @@ static void print_wifi_stats(struct net_if *iface, struct net_stats_wifi *data,
 	shell_fprintf(sh, SHELL_NORMAL, "Bytes sent       : %u\n", data->bytes.sent);
 	shell_fprintf(sh, SHELL_NORMAL, "Packets received : %u\n", data->pkts.rx);
 	shell_fprintf(sh, SHELL_NORMAL, "Packets sent     : %u\n", data->pkts.tx);
+	shell_fprintf(sh, SHELL_NORMAL, "Receive errors   : %u\n", data->errors.rx);
+	shell_fprintf(sh, SHELL_NORMAL, "Send errors      : %u\n", data->errors.tx);
 	shell_fprintf(sh, SHELL_NORMAL, "Bcast received   : %u\n", data->broadcast.rx);
 	shell_fprintf(sh, SHELL_NORMAL, "Bcast sent       : %u\n", data->broadcast.tx);
 	shell_fprintf(sh, SHELL_NORMAL, "Mcast received   : %u\n", data->multicast.rx);
@@ -470,10 +478,10 @@ static int cmd_wifi_ps(const struct shell *sh, size_t argc, char *argv[])
 					config.twt_flows[i].trigger ? "true" : "false");
 				shell_fprintf(sh, SHELL_NORMAL, "TWT announce: %s\n",
 					config.twt_flows[i].announce ? "true" : "false");
-				shell_fprintf(sh, SHELL_NORMAL, "TWT wake interval: %d ms\n",
-					config.twt_flows[i].twt_wake_interval_ms);
-				shell_fprintf(sh, SHELL_NORMAL, "TWT interval: %d ms\n",
-					config.twt_flows[i].twt_interval_ms);
+				shell_fprintf(sh, SHELL_NORMAL, "TWT wake interval: %d us\n",
+					config.twt_flows[i].twt_wake_interval);
+				shell_fprintf(sh, SHELL_NORMAL, "TWT interval: %lld us\n",
+					config.twt_flows[i].twt_interval);
 				shell_fprintf(sh, SHELL_NORMAL, "========================\n");
 			}
 		}
@@ -591,9 +599,10 @@ static int cmd_wifi_twt_setup_quick(const struct shell *sh, size_t argc,
 	params.setup.trigger = 1;
 	params.setup.announce = 0;
 
-	if (!parse_number(sh, (long *)&params.setup.twt_wake_interval_ms, argv[idx++], 1, 255) ||
-	    !parse_number(sh, (long *)&params.setup.twt_interval_ms, argv[idx++], 1,
-			  WIFI_MAX_TWT_INTERVAL_MS))
+	if (!parse_number(sh, (long *)&params.setup.twt_wake_interval, argv[idx++],
+			  1, WIFI_MAX_TWT_WAKE_INTERVAL_US) ||
+	    !parse_number(sh, (long *)&params.setup.twt_interval, argv[idx++], 1,
+			  WIFI_MAX_TWT_INTERVAL_US))
 		return -EINVAL;
 
 	if (net_mgmt(NET_REQUEST_WIFI_TWT, iface, &params, sizeof(params))) {
@@ -640,9 +649,10 @@ static int cmd_wifi_twt_setup(const struct shell *sh, size_t argc,
 	    !parse_number(sh, (long *)&params.setup.trigger, argv[idx++], 0, 1) ||
 	    !parse_number(sh, (long *)&params.setup.implicit, argv[idx++], 0, 1) ||
 	    !parse_number(sh, (long *)&params.setup.announce, argv[idx++], 0, 1) ||
-	    !parse_number(sh, (long *)&params.setup.twt_wake_interval_ms, argv[idx++], 1, 255) ||
-	    !parse_number(sh, (long *)&params.setup.twt_interval_ms, argv[idx++], 1,
-			  WIFI_MAX_TWT_INTERVAL_MS))
+	    !parse_number(sh, (long *)&params.setup.twt_wake_interval, argv[idx++], 1,
+			  WIFI_MAX_TWT_WAKE_INTERVAL_US) ||
+	    !parse_number(sh, (long *)&params.setup.twt_interval, argv[idx++], 1,
+			  WIFI_MAX_TWT_INTERVAL_US))
 		return -EINVAL;
 
 	params.negotiation_type = neg_type;
@@ -841,13 +851,13 @@ SHELL_STATIC_SUBCMD_SET_CREATE(wifi_cmd_ap,
 
 SHELL_STATIC_SUBCMD_SET_CREATE(wifi_twt_ops,
 	SHELL_CMD(quick_setup, NULL, " Start a TWT flow with defaults:\n"
-		"<twt_wake_interval_ms: 1-256ms> <twt_interval_ms: 1ms-2^32ms>\n",
+		"<twt_wake_interval: 1-262144us> <twt_interval: 1us-2^64us>\n",
 		cmd_wifi_twt_setup_quick),
 	SHELL_CMD(setup, NULL, " Start a TWT flow:\n"
 		"<negotiation_type, 0: Individual, 1: Broadcast, 2: Wake TBTT>\n"
 		"<setup_cmd: 0: Request, 1: Suggest, 2: Demand>\n"
 		"<dialog_token: 1-255> <flow_id: 1-255> <responder: 0/1> <trigger: 0/1> <implicit:0/1> "
-		"<announce: 0/1> <twt_wake_interval_ms: 1-256ms> <twt_interval_ms: 1ms-2^32ms>\n",
+		"<announce: 0/1> <twt_wake_interval: 1-262144us> <twt_interval: 1us-2^64us>\n",
 		cmd_wifi_twt_setup),
 	SHELL_CMD(teardown, NULL, " Teardown a TWT flow:\n"
 		"<negotiation_type, 0: Individual, 1: Broadcast, 2: Wake TBTT>\n"

@@ -886,6 +886,8 @@ int bt_iso_chan_get_tx_sync(const struct bt_iso_chan *chan, struct bt_iso_tx_inf
 #if defined(CONFIG_BT_ISO_UNICAST)
 int bt_iso_chan_disconnect(struct bt_iso_chan *chan)
 {
+	int err;
+
 	CHECKIF(!chan) {
 		LOG_DBG("Invalid parameter: chan %p", chan);
 		return -EINVAL;
@@ -896,12 +898,36 @@ int bt_iso_chan_disconnect(struct bt_iso_chan *chan)
 		return -EINVAL;
 	}
 
-	if (chan->iso->iso.acl == NULL) {
+	if (chan->iso->iso.acl == NULL ||
+	    chan->state == BT_ISO_STATE_DISCONNECTED) {
 		LOG_DBG("Channel is not connected");
 		return -ENOTCONN;
 	}
 
-	return bt_conn_disconnect(chan->iso, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+	if (chan->state == BT_ISO_STATE_ENCRYPT_PENDING) {
+		LOG_DBG("Channel already disconnected");
+		bt_iso_chan_set_state(chan, BT_ISO_STATE_DISCONNECTED);
+
+		if (chan->ops->disconnected) {
+			chan->ops->disconnected(chan,
+						BT_HCI_ERR_LOCALHOST_TERM_CONN);
+		}
+
+		return 0;
+	}
+
+	if (chan->state == BT_ISO_STATE_DISCONNECTING) {
+		LOG_DBG("Already disconnecting");
+
+		return -EALREADY;
+	}
+
+	err = bt_conn_disconnect(chan->iso, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+	if (err == 0) {
+		bt_iso_chan_set_state(chan, BT_ISO_STATE_DISCONNECTING);
+	}
+
+	return err;
 }
 
 void bt_iso_cleanup_acl(struct bt_conn *iso)
@@ -959,6 +985,7 @@ void hci_le_cis_established(struct net_buf *buf)
 
 	CHECKIF(iso->type != BT_CONN_TYPE_ISO) {
 		LOG_DBG("Invalid connection type %u", iso->type);
+		bt_conn_unref(iso);
 		return;
 	}
 
@@ -1204,6 +1231,8 @@ void hci_le_cis_req(struct net_buf *buf)
 		if (err != 0) {
 			LOG_ERR("Failed to reject CIS");
 		}
+
+		bt_conn_unref(acl);
 		return;
 	}
 
@@ -1227,6 +1256,7 @@ void hci_le_cis_req(struct net_buf *buf)
 	err = iso_accept(acl, iso);
 	if (err) {
 		LOG_DBG("App rejected ISO %d", err);
+		bt_iso_cleanup_acl(iso);
 		bt_conn_unref(iso);
 		hci_le_reject_cis(cis_handle,
 				  BT_HCI_ERR_INSUFFICIENT_RESOURCES);
@@ -1239,6 +1269,7 @@ void hci_le_cis_req(struct net_buf *buf)
 
 	err = hci_le_accept_cis(cis_handle);
 	if (err) {
+		bt_iso_cleanup_acl(iso);
 		bt_conn_unref(iso);
 		hci_le_reject_cis(cis_handle,
 				  BT_HCI_ERR_INSUFFICIENT_RESOURCES);

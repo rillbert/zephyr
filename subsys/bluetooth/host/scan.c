@@ -632,10 +632,15 @@ void bt_hci_le_adv_ext_report(struct net_buf *buf)
 		}
 
 		if (data_status == BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS_INCOMPLETE) {
-			/* Controller truncated, no more data will come.
-			 * We do not need to keep track of this advertiser.
-			 * Discard this report.
+			/* Got HCI_LE_Extended_Advertising_Report: Incomplete, data truncated, no
+			 * more to come. This means the Controller is aborting the reassembly. We
+			 * discard the partially received report, and the application is not
+			 * notified.
+			 *
+			 * See the Controller's documentation for possible reasons for aborting.
+			 * Hint: CONFIG_BT_CTLR_SCAN_DATA_LEN_MAX.
 			 */
+			LOG_DBG("Discarding incomplete advertisement.");
 			reset_reassembling_advertiser();
 			goto cont;
 		}
@@ -1059,6 +1064,7 @@ void bt_hci_le_past_received(struct net_buf *buf)
 	if (!per_adv_sync) {
 		LOG_WRN("Could not allocate new PA sync from PAST");
 		per_adv_sync_terminate(sys_le16_to_cpu(evt->sync_handle));
+		bt_conn_unref(sync_info.conn);
 		return;
 	}
 
@@ -1089,6 +1095,8 @@ void bt_hci_le_past_received(struct net_buf *buf)
 			listener->synced(per_adv_sync, &sync_info);
 		}
 	}
+
+	bt_conn_unref(sync_info.conn);
 }
 #endif /* CONFIG_BT_CONN */
 
@@ -1198,6 +1206,11 @@ void bt_hci_le_adv_report(struct net_buf *buf)
 		}
 
 		evt = net_buf_pull_mem(buf, sizeof(*evt));
+
+		if (buf->len < evt->length + sizeof(adv_info.rssi)) {
+			LOG_ERR("Unexpected end of buffer");
+			break;
+		}
 
 		adv_info.primary_phy = BT_GAP_LE_PHY_1M;
 		adv_info.secondary_phy = 0;

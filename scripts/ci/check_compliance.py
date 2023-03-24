@@ -607,6 +607,7 @@ flagged.
         "CLOCK_STM32_SYSCLK_SRC_",
         "CMU",
         "BT_6LOWPAN",  # Defined in Linux, mentioned in docs
+        "CMD_CACHE",  # Defined in U-Boot, mentioned in docs
         "COUNTER_RTC_STM32_CLOCK_SRC",
         "CRC",  # Used in TI CC13x2 / CC26x2 SDK comment
         "DEEP_SLEEP",  # #defined by RV32M1 in ext/
@@ -943,7 +944,7 @@ class BinaryFiles(ComplianceTest):
     def run(self):
         BINARY_ALLOW_PATHS = ("doc/", "boards/", "samples/")
         # svg files are always detected as binary, see .gitattributes
-        BINARY_ALLOW_EXT = (".jpg", ".jpeg", ".png", ".svg")
+        BINARY_ALLOW_EXT = (".jpg", ".jpeg", ".png", ".svg", ".webp")
 
         for stat in git("diff", "--numstat", "--diff-filter=A",
                         COMMIT_RANGE).splitlines():

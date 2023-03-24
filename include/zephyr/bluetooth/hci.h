@@ -8,10 +8,12 @@
 #ifndef ZEPHYR_INCLUDE_BLUETOOTH_HCI_H_
 #define ZEPHYR_INCLUDE_BLUETOOTH_HCI_H_
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
 #include <zephyr/toolchain.h>
 #include <zephyr/types.h>
-#include <stdbool.h>
-#include <string.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/net/buf.h>
 #include <zephyr/bluetooth/addr.h>
@@ -649,6 +651,7 @@ struct bt_hci_rp_configure_data_path {
 #define BT_HCI_VERSION_5_1                      10
 #define BT_HCI_VERSION_5_2                      11
 #define BT_HCI_VERSION_5_3                      12
+#define BT_HCI_VERSION_5_4                      13
 
 #define BT_HCI_OP_READ_LOCAL_VERSION_INFO       BT_OP(BT_OGF_INFO, 0x0001)
 struct bt_hci_rp_read_local_version_info {

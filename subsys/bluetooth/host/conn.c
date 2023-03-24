@@ -14,6 +14,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/check.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/util_macro.h>
 #include <zephyr/sys/slist.h>
 #include <zephyr/debug/stack.h>
 #include <zephyr/sys/__assert.h>
@@ -53,6 +54,9 @@ struct tx_meta {
 	bool is_cont;
 };
 
+BUILD_ASSERT(sizeof(struct tx_meta) == CONFIG_BT_CONN_TX_USER_DATA_SIZE,
+	     "User data size is wrong!");
+
 #define tx_data(buf) ((struct tx_meta *)net_buf_user_data(buf))
 K_FIFO_DEFINE(free_tx);
 
@@ -88,7 +92,7 @@ static void notify_connected(struct bt_conn *conn);
 static struct bt_conn acl_conns[CONFIG_BT_MAX_CONN];
 NET_BUF_POOL_DEFINE(acl_tx_pool, CONFIG_BT_L2CAP_TX_BUF_COUNT,
 		    BT_L2CAP_BUF_SIZE(CONFIG_BT_L2CAP_TX_MTU),
-		    sizeof(struct tx_meta), NULL);
+		    CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
 
 #if CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0
 /* Dedicated pool for fragment buffers in case queued up TX buffers don't
@@ -98,7 +102,8 @@ NET_BUF_POOL_DEFINE(acl_tx_pool, CONFIG_BT_L2CAP_TX_BUF_COUNT,
  * another buffer from the acl_tx_pool would result in a deadlock.
  */
 NET_BUF_POOL_FIXED_DEFINE(frag_pool, CONFIG_BT_L2CAP_TX_FRAG_COUNT,
-			  BT_BUF_ACL_SIZE(CONFIG_BT_BUF_ACL_TX_SIZE), 8, NULL);
+			  BT_BUF_ACL_SIZE(CONFIG_BT_BUF_ACL_TX_SIZE),
+			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
 
 #endif /* CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0 */
 
@@ -411,6 +416,11 @@ int bt_conn_send_cb(struct bt_conn *conn, struct net_buf *buf,
 	LOG_DBG("conn handle %u buf len %u cb %p user_data %p", conn->handle, buf->len, cb,
 		user_data);
 
+	if (buf->user_data_size < CONFIG_BT_CONN_TX_USER_DATA_SIZE) {
+		LOG_ERR("not enough room in user_data");
+		return -EINVAL;
+	}
+
 	if (conn->state != BT_CONN_CONNECTED) {
 		LOG_ERR("not connected!");
 		return -ENOTCONN;
@@ -419,7 +429,7 @@ int bt_conn_send_cb(struct bt_conn *conn, struct net_buf *buf,
 	if (cb) {
 		tx = conn_tx_alloc();
 		if (!tx) {
-			LOG_ERR("Unable to allocate TX context");
+			LOG_DBG("Unable to allocate TX context");
 			return -ENOBUFS;
 		}
 
@@ -747,11 +757,10 @@ static void conn_cleanup(struct bt_conn *conn)
 
 static void conn_destroy(struct bt_conn *conn, void *data)
 {
-	k_work_cancel_delayable(&conn->deferred_work);
-
-	conn->pending_no_cb = 0;
-
-	conn_cleanup(conn);
+	if (conn->state == BT_CONN_CONNECTED ||
+	    conn->state == BT_CONN_DISCONNECTING) {
+		bt_conn_set_state(conn, BT_CONN_DISCONNECT_COMPLETE);
+	}
 
 	bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 }
@@ -1100,10 +1109,6 @@ void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state)
 			bt_conn_unref(conn);
 			break;
 		case BT_CONN_CONNECTED:
-			/* Can only happen if bt_conn_cleanup_all is called
-			 * whilst in a connection.
-			 */
-			break;
 		case BT_CONN_DISCONNECTING:
 		case BT_CONN_DISCONNECTED:
 			/* Cannot happen. */
@@ -1983,6 +1988,11 @@ struct bt_conn *bt_conn_add_sco(const bt_addr_t *peer, int link_type)
 	}
 
 	sco_conn->sco.acl = bt_conn_lookup_addr_br(peer);
+	if (!sco_conn->sco.acl) {
+		bt_conn_unref(sco_conn);
+		return NULL;
+	}
+
 	sco_conn->type = BT_CONN_TYPE_SCO;
 
 	if (link_type == BT_HCI_SCO) {
@@ -2456,7 +2466,7 @@ int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info)
 #if defined(CONFIG_BT_ISO)
 	case BT_CONN_TYPE_ISO:
 		if (IS_ENABLED(CONFIG_BT_ISO_UNICAST) &&
-		    conn->iso.info.type == BT_ISO_CHAN_TYPE_CONNECTED) {
+		    conn->iso.info.type == BT_ISO_CHAN_TYPE_CONNECTED && conn->iso.acl != NULL) {
 			info->le.dst = &conn->iso.acl->le.dst;
 			info->le.src = &bt_dev.id_addr[conn->iso.acl->id];
 		} else {
@@ -3059,6 +3069,19 @@ int bt_conn_auth_passkey_entry(struct bt_conn *conn, unsigned int passkey)
 
 	return -EINVAL;
 }
+
+#if defined(CONFIG_BT_PASSKEY_KEYPRESS)
+int bt_conn_auth_keypress_notify(struct bt_conn *conn,
+				 enum bt_conn_auth_keypress type)
+{
+	if (IS_ENABLED(CONFIG_BT_SMP) && conn->type == BT_CONN_TYPE_LE) {
+		return bt_smp_auth_keypress_notify(conn, type);
+	}
+
+	LOG_ERR("Not implemented for conn type %d", conn->type);
+	return -EINVAL;
+}
+#endif
 
 int bt_conn_auth_passkey_confirm(struct bt_conn *conn)
 {

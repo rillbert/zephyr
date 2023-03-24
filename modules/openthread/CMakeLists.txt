@@ -184,6 +184,12 @@ else()
   set(OT_DNS_DSO OFF CACHE BOOL "Enable DNS Stateful Operations (DSO) support" FORCE)
 endif()
 
+if(CONFIG_OPENTHREAD_DNS_QUERY_UPSTREAM)
+  set(OT_DNS_QUERY_UPSTREAM ON CACHE BOOL "Enable forwarding DNS queries to upstream" FORCE)
+else()
+  set(OT_DNS_QUERY_UPSTREAM OFF CACHE BOOL "Enable forwarding DNS queries to upstream" FORCE)
+endif()
+
 if(CONFIG_OPENTHREAD_DNSSD_SERVER)
   set(OT_DNSSD_SERVER ON CACHE BOOL "Enable DNS-SD server support" FORCE)
 else()
@@ -284,6 +290,12 @@ if(CONFIG_OPENTHREAD_MAC_FILTER)
   set(OT_MAC_FILTER ON CACHE BOOL "Enable MAC filter support" FORCE)
 else()
   set(OT_MAC_FILTER OFF CACHE BOOL "Enable MAC filter support" FORCE)
+endif()
+
+if(CONFIG_OPENTHREAD_MESH_DIAG)
+  set(OT_MESH_DIAG ON CACHE BOOL "Enable Mesh Diagnostics" FORCE)
+else()
+  set(OT_MESH_DIAG OFF CACHE BOOL "Enable Mesh Diagnostics" FORCE)
 endif()
 
 if(CONFIG_OPENTHREAD_MESSAGE_USE_HEAP)
@@ -412,6 +424,12 @@ else()
   set(OT_SRP_SERVER OFF CACHE BOOL "Enable SRP Server support" FORCE)
 endif()
 
+if(CONFIG_OPENTHREAD_TCP_ENABLE)
+  set(OT_TCP ON CACHE BOOL "Enable TCP support" FORCE)
+else()
+  set(OT_TCP OFF CACHE BOOL "Enable TCP support" FORCE)
+endif()
+
 if(CONFIG_OPENTHREAD_TIME_SYNC)
   set(OT_TIME_SYNC ON CACHE BOOL "Enable the time synchronization service feature" FORCE)
 else()
@@ -445,6 +463,8 @@ endif()
 if(CONFIG_OPENTHREAD_COPROCESSOR_VENDOR_HOOK_SOURCE)
   set(OT_NCP_VENDOR_HOOK_SOURCE ${CONFIG_OPENTHREAD_COPROCESSOR_VENDOR_HOOK_SOURCE} CACHE STRING "NCP vendor hook source file name" FORCE)
 endif()
+
+set(BUILD_TESTING OFF CACHE BOOL "Disable openthread cmake testing targets" FORCE)
 
 # Zephyr logging options
 
