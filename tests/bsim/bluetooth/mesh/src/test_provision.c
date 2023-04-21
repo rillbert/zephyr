@@ -13,9 +13,15 @@
 #include <bs_pc_backchannel.h>
 #include <time_machine.h>
 
+#if defined CONFIG_BT_MESH_USES_MBEDTLS_PSA
+#include <psa/crypto.h>
+#elif defined CONFIG_BT_MESH_USES_TINYCRYPT
 #include <tinycrypt/constants.h>
 #include <tinycrypt/ecc.h>
 #include <tinycrypt/ecc_dh.h>
+#else
+#error "Unknown crypto library has been chosen"
+#endif
 
 #include <zephyr/sys/byteorder.h>
 
@@ -44,7 +50,7 @@ static uint8_t static_key1[] = {0x6E, 0x6F, 0x72, 0x64, 0x69, 0x63, 0x5F,
 		0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x5F, 0x31};
 static uint8_t static_key2[] = {0x6E, 0x6F, 0x72, 0x64, 0x69, 0x63, 0x5F};
 
-static uint8_t private_key_be[64];
+static uint8_t private_key_be[32];
 static uint8_t public_key_be[64];
 
 static struct oob_auth_test_vector_s {
@@ -85,6 +91,7 @@ static uint8_t *uuid_to_provision;
 static struct k_sem reprov_sem;
 
 #if IS_RPR_PRESENT
+static struct k_sem scan_sem;
 /* Remote Provisioning models related variables. */
 static uint8_t *uuid_to_provision_remote;
 static void rpr_scan_report(struct bt_mesh_rpr_cli *cli, const struct bt_mesh_rpr_node *srv,
@@ -325,6 +332,48 @@ static void oob_auth_set(int test_step)
 	prov.input_actions = oob_auth_test_vector[test_step].input_actions;
 }
 
+#if defined CONFIG_BT_MESH_USES_MBEDTLS_PSA
+static void generate_oob_key_pair(void)
+{
+	psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
+	psa_key_id_t priv_key_id = PSA_KEY_ID_NULL;
+	psa_status_t status;
+	size_t key_len;
+	uint8_t public_key_repr[PSA_KEY_EXPORT_ECC_PUBLIC_KEY_MAX_SIZE(256)];
+
+	/* Crypto settings for ECDH using the SHA256 hashing algorithm,
+	 * the secp256r1 curve
+	 */
+	psa_set_key_usage_flags(&key_attributes, PSA_KEY_USAGE_DERIVE | PSA_KEY_USAGE_EXPORT);
+	psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_VOLATILE);
+	psa_set_key_algorithm(&key_attributes, PSA_ALG_ECDH);
+	psa_set_key_type(&key_attributes, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+	psa_set_key_bits(&key_attributes, 256);
+
+	/* Generate a key pair */
+	status = psa_generate_key(&key_attributes, &priv_key_id);
+	ASSERT_TRUE(status == PSA_SUCCESS);
+
+	status = psa_export_public_key(priv_key_id, public_key_repr, sizeof(public_key_repr),
+				       &key_len);
+	ASSERT_TRUE(status == PSA_SUCCESS);
+
+	ASSERT_TRUE(key_len == PSA_KEY_EXPORT_ECC_PUBLIC_KEY_MAX_SIZE(256));
+
+	status = psa_export_key(priv_key_id, private_key_be, sizeof(private_key_be), &key_len);
+	ASSERT_TRUE(status == PSA_SUCCESS);
+
+	ASSERT_TRUE(key_len == sizeof(private_key_be));
+
+	memcpy(public_key_be, public_key_repr + 1, 64);
+}
+#elif defined CONFIG_BT_MESH_USES_TINYCRYPT
+static void generate_oob_key_pair(void)
+{
+	ASSERT_TRUE(uECC_make_key(public_key_be, private_key_be, uECC_secp256r1()));
+}
+#endif
+
 static void oob_device(bool use_oob_pk)
 {
 	k_sem_init(&prov_sem, 0, 1);
@@ -332,7 +381,7 @@ static void oob_device(bool use_oob_pk)
 	bt_mesh_device_setup(&prov, &comp);
 
 	if (use_oob_pk) {
-		ASSERT_TRUE(uECC_make_key(public_key_be, private_key_be, uECC_secp256r1()));
+		generate_oob_key_pair();
 		prov.public_key_be = public_key_be;
 		prov.private_key_be = private_key_be;
 		bs_bc_send_msg(*oob_channel_id, public_key_be, 64);
@@ -769,6 +818,69 @@ static void test_provisioner_pb_remote_client_reprovision(void)
 
 		node_configure_and_reset();
 	}
+
+	PASS();
+}
+
+static void rpr_scan_report_parallel(struct bt_mesh_rpr_cli *cli,
+				const struct bt_mesh_rpr_node *srv,
+				struct bt_mesh_rpr_unprov *unprov,
+				struct net_buf_simple *adv_data)
+{
+	if (!uuid_to_provision_remote || memcmp(uuid_to_provision_remote, unprov->uuid, 16)) {
+		return;
+	}
+
+	LOG_INF("Scanning dev idx 2 succeeded.\n");
+	k_sem_give(&scan_sem);
+}
+
+static void test_provisioner_pb_remote_client_parallel(void)
+{
+	static uint8_t uuid[16];
+	uint16_t pb_remote_server_addr;
+	struct bt_mesh_rpr_scan_status scan_status;
+
+	memcpy(uuid, dev_uuid, 16);
+
+	k_sem_init(&prov_sem, 0, 1);
+	k_sem_init(&scan_sem, 0, 1);
+
+	bt_mesh_device_setup(&prov, &rpr_cli_comp);
+
+	ASSERT_OK(bt_mesh_cdb_create(test_net_key));
+	ASSERT_OK(bt_mesh_provision(test_net_key, 0, 0, 0, 0x0001, dev_key));
+
+	/* Provision the 2nd device over PB-Adv. */
+	ASSERT_OK(provision_adv(1, &pb_remote_server_addr));
+
+	struct bt_mesh_rpr_node srv = {
+		.addr = pb_remote_server_addr,
+		.net_idx = 0,
+		.ttl = 3,
+	};
+
+	rpr_cli.scan_report = rpr_scan_report_parallel;
+
+	LOG_INF("Scanning dev idx 2 and provisioning dev idx 3 in parallel ...\n");
+	/* provisioning device with dev index 2 */
+	uuid[6] = '0' + 2;
+	ASSERT_OK(bt_mesh_provision_remote(&rpr_cli, &srv, uuid, 0, prov_addr));
+	/* scanning device with dev index 3 */
+	uuid[6] = '0' + 3;
+	uuid_to_provision_remote = uuid;
+	ASSERT_OK(bt_mesh_rpr_scan_start(&rpr_cli, &srv, uuid, 5, 1, &scan_status));
+	ASSERT_EQUAL(BT_MESH_RPR_SUCCESS, scan_status.status);
+	ASSERT_EQUAL(BT_MESH_RPR_SCAN_SINGLE, scan_status.scan);
+	ASSERT_EQUAL(1, scan_status.max_devs);
+	ASSERT_EQUAL(5, scan_status.timeout);
+
+	ASSERT_OK(k_sem_take(&scan_sem, K_SECONDS(20)));
+	ASSERT_OK(k_sem_take(&prov_sem, K_SECONDS(20)));
+
+	/* Provisioning device index 3. Need it to succeed provisionee test scenario. */
+	ASSERT_OK(bt_mesh_provision_remote(&rpr_cli, &srv, uuid, 0, prov_addr));
+	ASSERT_OK(k_sem_take(&prov_sem, K_SECONDS(20)));
 
 	PASS();
 }
@@ -1236,6 +1348,8 @@ static const struct bst_test_instance test_connect[] = {
 		  "Provisioner: pb-remote provisioning, resetting and reprov-ing multiple times."),
 	TEST_CASE(provisioner, pb_remote_client_nppi_robustness,
 		  "Provisioner: pb-remote provisioning, NPPI robustness."),
+	TEST_CASE(provisioner, pb_remote_client_parallel,
+		  "Provisioner: pb-remote provisioning, parallel scanning and provisioning."),
 #endif
 
 	BSTEST_END_MARKER

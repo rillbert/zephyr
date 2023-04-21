@@ -282,7 +282,7 @@ endif()
 # @Intent: Set compiler specific macro inclusion of AUTOCONF_H
 zephyr_compile_options("SHELL: $<TARGET_PROPERTY:compiler,imacros> ${AUTOCONF_H}")
 
-if(NOT CONFIG_PICOLIBC)
+if(CONFIG_COMPILER_FREESTANDING)
   # @Intent: Set compiler specific flag for bare metal freestanding option
   zephyr_compile_options($<$<COMPILE_LANGUAGE:C>:$<TARGET_PROPERTY:compiler,freestanding>>)
   zephyr_compile_options($<$<COMPILE_LANGUAGE:ASM>:$<TARGET_PROPERTY:compiler,freestanding>>)
@@ -298,6 +298,11 @@ zephyr_compile_options($<TARGET_PROPERTY:compiler,no_common>)
 
 # @Intent: Set compiler specific flag for production of debug information
 zephyr_compile_options($<TARGET_PROPERTY:compiler,debug>)
+
+if(CONFIG_COMPILER_SAVE_TEMPS)
+  # @Intent: Set compiler specific flag for saving temporary object files
+  zephyr_compile_options($<TARGET_PROPERTY:compiler,save_temps>)
+endif()
 
 if(CONFIG_COMPILER_COLOR_DIAGNOSTICS)
 # @Intent: Set compiler specific flag for diagnostic messages
@@ -378,6 +383,7 @@ zephyr_compile_options($<$<COMPILE_LANGUAGE:CXX>:$<TARGET_PROPERTY:compiler-cpp,
 
 # @Intent: Do not make position independent code / executable
 zephyr_compile_options($<$<COMPILE_LANGUAGE:C>:$<TARGET_PROPERTY:compiler,no_position_independent>>)
+zephyr_link_libraries($<TARGET_PROPERTY:linker,no_position_independent>)
 
 # Allow the user to inject options when calling cmake, e.g.
 # 'cmake -DEXTRA_CFLAGS="-Werror -Wno-deprecated-declarations" ..'
@@ -436,14 +442,15 @@ zephyr_cc_option_ifdef(CONFIG_STACK_USAGE            -fstack-usage)
 # application code. This saves some memory, stops leaking user locations
 # in binaries, makes failure logs more deterministic and most
 # importantly makes builds more deterministic
-
-# If several match then the last one wins. This matters for instances
-# like tests/ and samples/: they're inside all of them! Then let's
-# strip as little as possible.
-zephyr_cc_option(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}=CMAKE_SOURCE_DIR)
-zephyr_cc_option(-fmacro-prefix-map=${ZEPHYR_BASE}=ZEPHYR_BASE)
-if(WEST_TOPDIR)
-  zephyr_cc_option(-fmacro-prefix-map=${WEST_TOPDIR}=WEST_TOPDIR)
+if(CONFIG_BUILD_OUTPUT_STRIP_PATHS)
+  # If several match then the last one wins. This matters for instances
+  # like tests/ and samples/: they're inside all of them! Then let's
+  # strip as little as possible.
+  zephyr_cc_option(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}=CMAKE_SOURCE_DIR)
+  zephyr_cc_option(-fmacro-prefix-map=${ZEPHYR_BASE}=ZEPHYR_BASE)
+  if(WEST_TOPDIR)
+    zephyr_cc_option(-fmacro-prefix-map=${WEST_TOPDIR}=WEST_TOPDIR)
+  endif()
 endif()
 
 # TODO: Archiver arguments
@@ -587,6 +594,9 @@ endforeach()
 # Done processing modules, clear ZEPHYR_CURRENT_MODULE_DIR and ZEPHYR_CURRENT_CMAKE_DIR.
 set(ZEPHYR_CURRENT_MODULE_DIR)
 set(ZEPHYR_CURRENT_CMAKE_DIR)
+
+get_property(LIBC_LINK_LIBRARIES TARGET zephyr_interface PROPERTY LIBC_LINK_LIBRARIES)
+zephyr_link_libraries(${LIBC_LINK_LIBRARIES})
 
 set(syscall_list_h   ${CMAKE_CURRENT_BINARY_DIR}/include/generated/syscall_list.h)
 set(syscalls_json    ${CMAKE_CURRENT_BINARY_DIR}/misc/generated/syscalls.json)
@@ -1719,7 +1729,18 @@ endif()
 
 # Generate and use MCUboot related artifacts as needed.
 if(CONFIG_BOOTLOADER_MCUBOOT)
-  include(${CMAKE_CURRENT_LIST_DIR}/cmake/mcuboot.cmake)
+  get_target_property(signing_script zephyr_property_target SIGNING_SCRIPT)
+  if(NOT signing_script)
+    set_target_properties(zephyr_property_target PROPERTIES SIGNING_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/cmake/mcuboot.cmake)
+  endif()
+endif()
+
+# Include signing script, if set
+get_target_property(signing_script zephyr_property_target SIGNING_SCRIPT)
+if(signing_script)
+  message(STATUS "Including signing script: ${signing_script}")
+
+  include(${signing_script})
 endif()
 
 # Generate USB-C VIF policies in XML format

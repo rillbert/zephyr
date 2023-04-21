@@ -152,7 +152,6 @@ static void usb_device_clock_init(void)
 	/* Make sure USBHS ram buffer and usb1 phy has power up */
 	POWER_DisablePD(kPDRUNCFG_APD_USBHS_SRAM);
 	POWER_DisablePD(kPDRUNCFG_PPD_USBHS_SRAM);
-	POWER_DisablePD(kPDRUNCFG_LP_HSPAD_FSPI0_VDET);
 	POWER_ApplyPD();
 
 	RESET_PeripheralReset(kUSBHS_PHY_RST_SHIFT_RSTn);
@@ -442,9 +441,8 @@ void imxrt_post_init_display_interface(void)
  *
  * @return 0
  */
-static int nxp_rt500_init(const struct device *arg)
+static int nxp_rt500_init(void)
 {
-	ARG_UNUSED(arg);
 
 	/* old interrupt lock level */
 	unsigned int oldLevel;

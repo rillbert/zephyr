@@ -22,9 +22,22 @@ manifest:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
 
+  group-filter: [-babblesim]
+
   #
   # Please add items below based on alphabetical order
   projects:
+    - name: bsim
+      repo-path: babblesim-manifest
+      revision: 908ffde6298a937c6549dbfa843a62caab26bfc5
+      import:
+        path-prefix: tools
+    - name: canopennode
+      revision: dec12fa3f0d790cafa8414a4c2930ea71ab72ffd
+      path: modules/lib/canopennode
+    - name: chre
+      revision: b7955c27e50485b7dafdc3888d7d6afdc2ac6d96
+      path: modules/lib/chre
     - name: cmsis
       revision: 74981bf893e8b10931464b9945e2143d99a3f0a3
       path: modules/hal/cmsis
@@ -43,7 +56,8 @@ manifest:
     - name: hal_espressif
       # revision: e41b0876c8bb0b9f90846c14397beff52d5590b4
       # revision: 73e7af1e2ed64571ce49ff9f07dc02690b9f2df5
-      revision: 8ee96508f329c7e59fcbf739f060cf12082dd805
+      # revision: 8ee96508f329c7e59fcbf739f060cf12082dd805
+      revision: 8e5da13712012d2cc480f7abc699235352153e05
       path: modules/hal/espressif
       west-commands: west/west-commands.yml
       groups:
@@ -70,12 +84,12 @@ manifest:
       revision: 8e303c264fc21c2116dc612658003a22e933124d
       path: modules/lib/lz4
     - name: mbedtls
-      revision: 6e166050075688fd3cf3d0cb3fc34a1c52df2496
+      revision: 4e1f66df894dc622da7bcd3884016a6ace08e9ea
       path: modules/crypto/mbedtls
       groups:
         - crypto
     - name: mcuboot
-      revision: 59624334748129cb93f096408911a227b0dd64c0
+      revision: 6902abba270c0fbcbe8ee3bb56fe39bc9acc2774
       path: bootloader/mcuboot
     - name: mipi-sys-t
       path: modules/debug/mipi-sys-t
@@ -91,24 +105,24 @@ manifest:
       groups:
         - tools
     - name: nrf_hw_models
-      revision: feb3e555f7745dc4fd0a16403f5d81a7ea7359b0
+      revision: bad9877e997b2c2a78dd74eec8978181f4655d14
       path: modules/bsim_hw_models/nrf_hw_models
     - name: open-amp
-      revision: aedcc262f93bbb1b0c2f58026911575729b7465c
+      revision: 233fb29c52ffa7733ba132a2b5987a8201ba8ec6
       path: modules/lib/open-amp
     - name: openthread
-      revision: 1f1a826d1891fc99d14822abc0a1de257e9c6e9b
+      revision: 7bdcf8a5d49838ce6e3e227e2780e4f12c461330
       path: modules/lib/openthread
     - name: picolibc
       path: modules/lib/picolibc
-      revision: 0694a78fc08b3300c7db79602c46ba0a64428c8e
+      revision: 93b5d5f2ad44867b60267417cd6d6250dbf68983
     - name: segger
-      revision: e2ff2200556e8a8f962921444275c04971a2bb3d
+      revision: 4bfaf28a11c3e5ec29badac744fab6d2f342749e
       path: modules/debug/segger
       groups:
         - debug
     - name: sof
-      revision: 6f5f7258ad2738df78e600568d38fc261e2a118d
+      revision: ac71254757478f79aa88807c168e88aee70a330b
       path: modules/audio/sof
     - name: tflite-micro
       revision: 9156d050927012da87079064db59d07f03b8baf6
@@ -120,12 +134,12 @@ manifest:
       groups:
         - crypto
     - name: TraceRecorderSource
-      revision: d92607521335eaaaedb01b241cdd26fda48a5ca6
+      revision: bc839bf94904bcdb91b33760e918afbef82e3ab4
       path: modules/debug/TraceRecorder
       groups:
         - debug
     - name: trusted-firmware-m
-      revision: 60fbdb43fb371d811a7d5d88709cb06fa92b7b68
+      revision: 0e25742e8023a0c823c825fbaf19ea265162cc56
       path: modules/tee/tf-m/trusted-firmware-m
       groups:
         - tee
@@ -148,7 +162,7 @@ manifest:
       revision: e8920192b66db4f909eb9cd3f155d5245c1ae825
       path: modules/lib/uoscore-uedhoc
     - name: zcbor
-      revision: 0.6.0
+      revision: 67fd8bb88d3136738661fa8bb5f9989103f4599e
       path: modules/lib/zcbor
     - name: zscilib
       path: modules/lib/zscilib
